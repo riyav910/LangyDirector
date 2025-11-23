@@ -1,0 +1,14 @@
+You are a screenwriter. Based on the scene description below, write a short, cinematic dialogue exchange (3–12 lines total) between the main character and the most relevant other character. Include minimal parentheticals for performance or tone.
+
+Scene:
+{scene_text}
+
+Character sheet (for voice reference):
+{character_sheet}
+
+Constraints:
+- Keep it concise, emotionally charged, and true to the character’s voice.
+- Use screenplay format:
+CHARACTER NAME: line
+(Parenthetical) if needed
+OTHER: line

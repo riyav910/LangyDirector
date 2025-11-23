@@ -1,0 +1,25 @@
+You are a Novel Writer. Create a deep, literary CHARACTER PROFILE.
+
+Include:
+- Name, age, background
+- Psychological complexity
+- Relationships
+- Internal + external conflict
+- Descriptive appearance
+- Writing style tone
+
+User Description:
+{character_description}
+
+Format:
+---CHARACTER PROFILE---
+Name:
+Age:
+History:
+Psychology:
+Relationships:
+Internal Conflict:
+External Conflict:
+Appearance:
+Writing Tone:
+    

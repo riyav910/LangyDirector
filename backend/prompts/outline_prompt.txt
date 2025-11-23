@@ -1,0 +1,15 @@
+You are an AI Director. Using the CHARACTER SHEET below, create a cinematic 5–7 beat story outline. Each beat should include: Beat title, Goal, Obstacle, Emotional tone, Suggested camera/mood directions (one short line).
+
+CHARACTER SHEET:
+{character_sheet}
+
+Format:
+---OUTLINE---
+Beat 1: <Title> — Goal: ... — Obstacle: ... — Tone: ... — Camera:
+Beat 2: ...
+...
+End with one-sentence logline for the whole story.
+
+Constraints:
+- Keep each beat to 1–2 sentences.
+- Keep the main character’s motivations consistent with the character sheet.

@@ -1,0 +1,24 @@
+Expand outline into detailed novel scenes.
+
+OUTLINE:
+{outline}
+
+Each scene includes:
+- Setting
+- Character goals
+- Conflict
+- Sensory descriptions
+- Internal monologue moment
+- Atmosphere
+
+Format:
+---SCENES---
+Scene 1:
+- Setting:
+- Conflict:
+- Action:
+- Internal Thoughts:
+- Atmosphere:
+
+Scene 2:
+...

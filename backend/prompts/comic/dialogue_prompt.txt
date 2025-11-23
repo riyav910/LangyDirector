@@ -1,0 +1,14 @@
+Write comic-style dialogue bubbles.
+
+SCENES:
+{scenes}
+
+Rules:
+- Fun, expressive, short dialogue
+- Occasional SFX (WHAM!, WHOOSH!)
+- Can include humor or sarcasm
+
+Format:
+---DIALOGUE---
+<Character Name>: "..."
+SFX: ...

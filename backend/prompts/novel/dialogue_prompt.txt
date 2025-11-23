@@ -1,0 +1,15 @@
+Write emotionally rich novel dialogue.
+
+SCENES:
+{scenes}
+
+Rules:
+- Natural, nuanced dialogue
+- Occasional introspection lines
+- Emotion-driven pacing
+
+Format:
+---DIALOGUE---
+<Character>: "..."
+<Character>: "..."
+(Narration note)

@@ -1,0 +1,15 @@
+You are an AI Director. Expand the outline below into a scene-by-scene breakdown. For each scene provide:
+- Scene number & title
+- Location (short)
+- Action summary (2–4 sentences)
+- Beats inside scene (three short bullets: what happens)
+- Key lines of dialogue (2–3 lines max)
+- Cinematic directions: camera (shots), lighting, sound design, mood
+- Running length (approx in minutes)
+
+Outline:
+{outline}
+
+Constraints:
+- Keep scenes cinematic and visual.
+- Don’t introduce new facts that contradict the character sheet.

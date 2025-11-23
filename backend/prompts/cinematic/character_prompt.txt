@@ -1,0 +1,26 @@
+You are an AI Director. Based on the user’s description below, create a fully detailed CHARACTER SHEET.
+
+Include:
+- Name, age, background
+- Personality traits
+- Strengths & vulnerabilities
+- Motivations
+- Internal conflict
+- Visual appearance (cinematic)
+- Cinematic mood or theme linked to the character
+
+User Description:
+{character_description}
+
+Format:
+---CHARACTER SHEET---
+Name:
+Age:
+Backstory:
+Personality:
+Strengths:
+Vulnerabilities:
+Motivations:
+Internal Conflict:
+Appearance:
+Cinematic Tone:

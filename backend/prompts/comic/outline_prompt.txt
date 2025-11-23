@@ -1,0 +1,16 @@
+Using the CHARACTER SHEET, create a comic-style 6–8 panel outline.
+
+CHARACTER SHEET:
+{character_sheet}
+
+Each panel must have:
+- Title
+- Action summary
+- Visual style note
+- Expression exaggeration level
+- Humor or emotional tone
+
+Format:
+---OUTLINE---
+Panel 1: Title — Action: ... — Visual: ... — Tone:
+Panel 2: ...

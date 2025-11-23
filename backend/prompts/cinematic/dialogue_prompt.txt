@@ -1,0 +1,15 @@
+Write a dramatic, cinematic dialogue between the main characters based on the scenes.
+
+SCENES:
+{scenes}
+
+Rules:
+- Keep lines concise and emotional.
+- Include emotional cues or pauses.
+- No overdramatization; keep it natural.
+- Add brief parenthetical notes only when necessary.
+
+Format:
+---DIALOGUE---
+<Character Name>: ...
+<Character Name>: ...

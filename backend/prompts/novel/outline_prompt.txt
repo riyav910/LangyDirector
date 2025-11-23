@@ -1,0 +1,21 @@
+Create a 3-act novel outline (10–14 beats).
+
+CHARACTER PROFILE:
+{character_sheet}
+
+Each beat:
+- Title
+- Plot progression
+- Character transformation moment
+- Internal struggle
+- Stakes
+
+Format:
+---OUTLINE---
+Act 1:
+Beat 1: ...
+Beat 2: ...
+Act 2:
+...
+Act 3:
+...

@@ -1,0 +1,23 @@
+Expand each panel into a comic storyboard-style description.
+
+OUTLINE:
+{outline}
+
+Each scene:
+- Visual description
+- Character expressions (exaggerated)
+- Action
+- Sound effects (SFX)
+- Comic-style tempo
+
+Format:
+---SCENES---
+Scene 1:
+- Visual:
+- Action:
+- Expressions:
+- SFX:
+- Mood:
+
+Scene 2:
+...
