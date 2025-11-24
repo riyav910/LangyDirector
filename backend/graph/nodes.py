@@ -15,7 +15,7 @@ def _load_prompt(mode: str, filename: str, **kwargs):
 
 
 def character_node(state):
-    mode = state["mode"]
+    mode = state.get("story_mode", "cinematic").lower()
     desc = state["character_sheet"]
 
     prompt = _load_prompt(mode, "character_prompt.txt",
@@ -26,7 +26,7 @@ def character_node(state):
 
 
 def outline_node(state):
-    mode = state["mode"]
+    mode = state.get("story_mode", "cinematic").lower()
     prompt = _load_prompt(mode, "outline_prompt.txt",
                           character_sheet=state["character_sheet"])
 
@@ -35,7 +35,7 @@ def outline_node(state):
 
 
 def scene_node(state):
-    mode = state["mode"]
+    mode = state.get("story_mode", "cinematic").lower()
     prompt = _load_prompt(mode, "scene_prompt.txt",
                           outline=state["outline"])
 
@@ -44,7 +44,7 @@ def scene_node(state):
 
 
 def dialogue_node(state):
-    mode = state["mode"]
+    mode = state.get("story_mode", "cinematic").lower()
     prompt = _load_prompt(mode, "dialogue_prompt.txt",
                           scenes=state["scenes"])
 
