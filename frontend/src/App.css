@@ -1,0 +1,19 @@
+.accordion-btn {
+  background: #222;
+  color: white;
+  border: none;
+  padding: 10px;
+  margin: 5px 0;
+  width: 100%;
+  text-align: left;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+pre {
+  background: #f4f4f4;
+  padding: 15px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
