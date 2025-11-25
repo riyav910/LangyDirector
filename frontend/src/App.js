@@ -1,83 +1,134 @@
-import { useState } from "react";
+// frontend/src/App.js
+import React, { useState } from "react";
+
+const API_BASE = "http://localhost:8000";
 
 function App() {
+  const [sessionId, setSessionId] = useState(null);
+  const [mode, setMode] = useState("cinematic");
   const [characterDescription, setCharacterDescription] = useState("");
-  const [story, setStory] = useState(null);
+  const [state, setState] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [storyMode, setStoryMode] = useState("Cinematic Story");
+  const [currentStep, setCurrentStep] = useState("character"); // character -> outline -> scenes -> dialogue
 
-
-  const generateStory = async () => {
+  async function createSession() {
     setLoading(true);
-    setStory(null);
+    const res = await fetch(`${API_BASE}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        story_mode: mode,
+        initial_character_description: characterDescription,
+      }),
+    });
+    const data = await res.json();
+    setSessionId(data.session_id);
+    setState(data.state);
+    setLoading(false);
+  }
 
-    try {
-      const response = await fetch("http://localhost:8000/generate-story", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          character_description: characterDescription,
-          story_mode: storyMode,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Server error: " + response.status);
-      }
-
-      const data = await response.json();
-      setStory(data);
-    } catch (err) {
-      console.error(err);
-      alert("Error generating story. Check backend logs!");
-    } finally {
-      setLoading(false);
+  async function runStep(step) {
+    if (!sessionId) {
+      alert("Create a session first");
+      return;
     }
-  };
+    setLoading(true);
+    const res = await fetch(`${API_BASE}/session/${sessionId}/step`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert("Server error: " + (err.detail || res.status));
+      setLoading(false);
+      return;
+    }
+    const data = await res.json();
+    setState(data.state);
+    setCurrentStep(nextStep(step));
+    setLoading(false);
+  }
+
+  function nextStep(step) {
+    if (step === "character") return "outline";
+    if (step === "outline") return "scenes";
+    if (step === "scenes") return "dialogue";
+    return "done";
+  }
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>🎬 AI Director</h1>
+    <div style={{ padding: 20 }}>
+      <h1>AI Director — Progressive Mode</h1>
 
-      <select
-        value={storyMode}
-        onChange={(e) => setStoryMode(e.target.value)}
-      >
-        <option value="cinematic">Cinematic Story</option>
-        <option value="comic">Comic</option>
-        <option value="novel">Novel Chapter</option>
-        <option value="thriller">Thriller</option>
-      </select>
+      {!sessionId && (
+        <>
+          <label>
+            Mode:
+            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="cinematic">Cinematic</option>
+              <option value="comic">Comic</option>
+              <option value="novel">Novel</option>
+            </select>
+          </label>
 
-      <textarea
-        placeholder="Describe your characters..."
-        value={characterDescription}
-        onChange={(e) => setCharacterDescription(e.target.value)}
-        style={{ width: "300px", height: "80px" }}
-      />
+          <div>
+            <textarea
+              placeholder="Brief character description..."
+              value={characterDescription}
+              onChange={(e) => setCharacterDescription(e.target.value)}
+              rows={5}
+              cols={60}
+            />
+          </div>
 
-      <button onClick={generateStory} style={{ marginLeft: "10px" }}>
-        Generate Story
-      </button>
+          <button onClick={createSession} disabled={loading}>
+            Create Session
+          </button>
+        </>
+      )}
 
-      {loading && <p>⏳ Generating story...</p>}
+      {sessionId && (
+        <>
+          <p>Session: {sessionId}</p>
 
-      {story && (
-        <div style={{ marginTop: "20px", whiteSpace: "pre-line" }}>
-          <h2>🧍 Character Sheet</h2>
-          <p>{story.character_sheet}</p>
+          <div style={{ marginTop: 10 }}>
+            <button onClick={() => runStep("character")} disabled={loading}>
+              Generate Character Sheet
+            </button>
+            <button onClick={() => runStep("outline")} disabled={loading}>
+              Generate Outline
+            </button>
+            <button onClick={() => runStep("scenes")} disabled={loading}>
+              Generate Scenes
+            </button>
+            <button onClick={() => runStep("dialogue")} disabled={loading}>
+              Generate Dialogue
+            </button>
+            <button onClick={async () => {
+              await fetch(`${API_BASE}/session/${sessionId}`, { method: "DELETE" });
+              setSessionId(null); setState(null);
+            }}> Delete Session </button>
+          </div>
 
-          <h2>📘 Story Outline</h2>
-          <p>{story.outline}</p>
+          {loading && <p>Generating... please wait</p>}
 
-          <h2>🎬 Scenes</h2>
-          <p>{story.scenes}</p>
+          {state && (
+            <div style={{ marginTop: 20 }}>
+              <h3>Character Sheet</h3>
+              <pre>{state.character_sheet}</pre>
 
-          <h2>💬 Dialogue</h2>
-          <p>{story.dialogue}</p>
-        </div>
+              <h3>Outline</h3>
+              <pre>{state.outline}</pre>
+
+              <h3>Scenes</h3>
+              <pre>{state.scenes}</pre>
+
+              <h3>Dialogue</h3>
+              <pre>{state.dialogue}</pre>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
