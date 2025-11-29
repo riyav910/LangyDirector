@@ -1,36 +1,43 @@
 # backend/main.py
 import time
 import uuid
-from typing import Optional, Dict, Any, List
-
+from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import base64
+import requests
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+import google.generativeai as genai
+from gtts import gTTS
+from fastapi import Response
+import os
 
-# import your node functions (they should accept and return a dict state)
-from graph.nodes import character_node, outline_node, scene_node, dialogue_node
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+from graph.nodes import character_node, outline_node, scene_node, dialogue_node                     
 
 app = FastAPI()
 
-# CORS - must be added before routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],   # TEMP: allow everything for testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+from typing import Optional, Dict, Any, List
 # ---------------------------
 # In-memory session store
 # ---------------------------
 SESSIONS: Dict[str, Dict[str, Any]] = {}
 
 # Limits (tunable)
-MAX_CHAR_SHEET_CHARS = 1600   # ~200-300 words
-MAX_SCENE_CHARS = 1000
-MAX_DIALOGUE_CHARS = 800
-MAX_OUTLINE_BEAT_SENTENCE_CHARS = 300
+MAX_CHAR_SHEET_CHARS = 1800   # ~200-300 words
+MAX_SCENE_CHARS = 1600
+MAX_DIALOGUE_CHARS = 1500
+MAX_OUTLINE_BEAT_SENTENCE_CHARS = 1150
 
 # ---------------------------
 # Pydantic request models
@@ -41,6 +48,9 @@ class CreateSessionRequest(BaseModel):
 
 class NextRequest(BaseModel):
     user_input: Optional[str] = None  # user's direction/choice to influence next generation
+
+class StepRequest(BaseModel):
+    step: str  # "character", "outline", "scenes", "dialogue"
 
 # ---------------------------
 # Helpers
@@ -89,24 +99,18 @@ def _parse_outline_to_beats(outline_text: str) -> List[str]:
         return []
     lines = [l.strip() for l in outline_text.splitlines() if l.strip()]
     beats = []
-    # Prefer lines that start with 'Beat' (case-insensitive)
     for ln in lines:
         if ln.lower().startswith("beat"):
             beats.append(ln)
     if beats:
         return beats
-    # Fallback: group lines into beats by blank-line separation
     paragraphs = [p.strip() for p in outline_text.split("\n\n") if p.strip()]
     if paragraphs:
-        # further trim each paragraph to one or two sentences
         for p in paragraphs:
-            # naive sentence split by '.' ; keep short
             sentences = [s.strip() for s in p.split('.') if s.strip()]
             if sentences:
-                # join first 1-2 sentences as a beat
                 beats.append('. '.join(sentences[:2]) + ('.' if sentences else ''))
         return beats
-    # last fallback: return the whole outline as one beat
     return [outline_text.strip()]
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -114,7 +118,6 @@ def _truncate(text: str, max_chars: int) -> str:
         return text
     if len(text) <= max_chars:
         return text
-    # try to cut at last newline or sentence boundary before limit
     cut = text[:max_chars]
     last_newline = cut.rfind('\n')
     if last_newline > max_chars // 2:
@@ -150,99 +153,120 @@ def delete_session(session_id: str):
 
 # Main interactive endpoint - advances exactly one generation step
 @app.post("/session/{session_id}/next")
-def generate_next(session_id: str, req: NextRequest):
+def generate_next(session_id: str, req: NextRequest = NextRequest()):
     session = SESSIONS.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Attach user override if provided (will be read by nodes via session)
+    # Store override if passed
     if req and req.user_input:
-        # store and the nodes / prompt templates can read {user_override} if they support it
         session["user_override"] = req.user_input
 
-    # Safety: ensure mode is set
     session["mode"] = session.get("mode", "cinematic")
 
-    # Decide what to generate next based on `current_step`, `scene_index`, `last_action`, and outline length
     try:
         next_output = None
         step_name = None
 
-        # Step 0: generate character sheet
+        # --------------------------------------------------
+        # STEP 0 — CHARACTER SHEET
+        # --------------------------------------------------
         if session["current_step"] == 0:
             step_name = "character"
-            # ensure we have a seed description in character_sheet (user provided or empty)
+
             if not session.get("character_sheet"):
                 session["character_sheet"] = session.get("character_description", "")
-            # nodes expect a state dict with keys - we pass a shallow copy to node and take result
+
             state_input = {
                 "mode": session["mode"],
-                "character": session["character_sheet"],  # some prompt templates expect 'character' or 'character_sheet'
+                "character": session["character_sheet"],
                 "character_sheet": session["character_sheet"],
                 "user_override": session.get("user_override"),
             }
-            out_state = character_node(state_input)  # should populate character_sheet
-            # store and truncate
-            gen = out_state.get("character_sheet", "") or out_state.get("character", "")
+
+            out_state = character_node(state_input)
+
+            # Error surfaced by node
+            if isinstance(out_state, dict) and out_state.get("_error"):
+                err = out_state["_error"]
+                raise HTTPException(status_code=500,
+                    detail=f"LLM node error (character): {err.get('message')}")
+
+            gen = (
+                out_state.get("character_sheet")
+                or out_state.get("character")
+                or out_state.get("text")
+                or ""
+            )
+
             gen = _truncate(gen, MAX_CHAR_SHEET_CHARS)
             session["character_sheet"] = gen
             session["last_action"] = "character"
-            session["current_step"] = 1  # next will be outline
-            # consume override
+            session["current_step"] = 1
             session["user_override"] = None
             next_output = gen
 
-        # Step 1: generate outline (beat-by-beat text)
+        # --------------------------------------------------
+        # STEP 1 — OUTLINE
+        # --------------------------------------------------
         elif session["current_step"] == 1:
             step_name = "outline"
+
             state_input = {
                 "mode": session["mode"],
                 "character_sheet": session.get("character_sheet", ""),
                 "user_override": session.get("user_override"),
             }
-            out_state = outline_node(state_input)  # should populate 'outline' or 'outline_text'
-            # the node may write state['outline'] or state['outline_text'], handle both
-            outline_text = out_state.get("outline") or out_state.get("outline_text") or ""
+
+            out_state = outline_node(state_input)
+
+            if isinstance(out_state, dict) and out_state.get("_error"):
+                err = out_state["_error"]
+                raise HTTPException(status_code=500,
+                    detail=f"LLM node error (outline): {err.get('message')}")
+
+            outline_text = (
+                out_state.get("outline")
+                or out_state.get("outline_text")
+                or out_state.get("text")
+                or ""
+            )
+
             outline_text = _truncate(outline_text, MAX_CHAR_SHEET_CHARS * 2)
             session["outline_text"] = outline_text
-            # parse into beats
+
+            # convert outline into beats
             beats = _parse_outline_to_beats(outline_text)
-            # enforce beat length limits
-            beats = [ _truncate(b, MAX_OUTLINE_BEAT_SENTENCE_CHARS) for b in beats ]
+            beats = [_truncate(b, MAX_OUTLINE_BEAT_SENTENCE_CHARS) for b in beats]
             session["outline_beats"] = beats
+
             session["last_action"] = "outline"
-            # after outline, move to scene phase
             session["current_step"] = 2
             session["scene_index"] = 0
             session["user_override"] = None
             next_output = outline_text
 
-        # Step 2+: scene/dialogue alternating phase
+        # --------------------------------------------------
+        # STEP 2+ — SCENE / DIALOGUE GENERATION
+        # --------------------------------------------------
         else:
-            # if outline_beats empty => cannot generate scenes
             beats: List[str] = session.get("outline_beats") or []
             if not beats:
                 raise HTTPException(status_code=400, detail="Outline missing; generate outline first")
 
-            # Determine if we should generate a scene or dialogue next.
-            # We will alternate: for scene_index = i:
-            #   if last_action is not "scene" for this index -> generate scene i
-            #   else -> generate dialogue for scene i and then increment scene_index
             si = session.get("scene_index", 0)
             last = session.get("last_action")
 
-            # Bound check: if scene_index >= number of beats => finished
+            # Finished all beats
             if si >= len(beats):
-                return {
-                    "status": "finished",
-                    "message": "All beats processed",
-                    "full_state": session,
-                }
+                return {"status": "finished", "message": "All beats processed", "state": session}
 
-            # Generate Scene for beat si if last action wasn't 'scene' for this index
+            # -------------------------
+            # Generate SCENE
+            # -------------------------
             if last != "scene" or len(session.get("scenes", [])) <= si:
                 step_name = f"scene_{si+1}"
-                # Prepare a state input for scene generation
+
                 state_input = {
                     "mode": session["mode"],
                     "outline": session["outline_text"],
@@ -251,65 +275,171 @@ def generate_next(session_id: str, req: NextRequest):
                     "character_sheet": session.get("character_sheet"),
                     "user_override": session.get("user_override"),
                 }
-                out_state = scene_node(state_input)  # should set "scenes" or return text
-                gen = out_state.get("scenes") or out_state.get("scene") or out_state.get("scenes_text") or ""
+
+                out_state = scene_node(state_input)
+
+                if isinstance(out_state, dict) and out_state.get("_error"):
+                    err = out_state["_error"]
+                    raise HTTPException(status_code=500,
+                        detail=f"LLM node error (scene): {err.get('message')}")
+
+                if isinstance(out_state, dict):
+                    gen = (
+                        out_state.get("scenes")
+                        or out_state.get("scene")
+                        or out_state.get("scenes_text")
+                        or out_state.get("text")
+                        or ""
+                    )
+                else:
+                    gen = str(out_state)
+
                 gen = gen.strip()
                 gen = _truncate(gen, MAX_SCENE_CHARS)
-                # ensure scenes list is long enough
+
                 scenes = session.get("scenes", [])
                 if len(scenes) <= si:
                     scenes.extend([""] * (si - len(scenes) + 1))
                 scenes[si] = gen
                 session["scenes"] = scenes
+
                 session["last_action"] = "scene"
-                # consume user override for this action
                 session["user_override"] = None
                 next_output = {"type": "scene", "index": si, "text": gen}
 
+            # -------------------------
+            # Generate DIALOGUE
+            # -------------------------
             else:
-                # Generate Dialogue for the same scene index
                 step_name = f"dialogue_{si+1}"
+
                 state_input = {
                     "mode": session["mode"],
-                    "scene": session["scenes"][si] if len(session.get("scenes", []))>si else "",
+                    "scene": session["scenes"][si] if len(session.get("scenes", [])) > si else "",
                     "beat": beats[si],
                     "beat_index": si,
                     "character_sheet": session.get("character_sheet"),
                     "user_override": session.get("user_override"),
                 }
+
                 out_state = dialogue_node(state_input)
-                gen = out_state.get("dialogue") or out_state.get("dialogues") or out_state.get("dialogue_text") or ""
+
+                if isinstance(out_state, dict) and out_state.get("_error"):
+                    err = out_state["_error"]
+                    raise HTTPException(status_code=500,
+                        detail=f"LLM node error (dialogue): {err.get('message')}")
+
+                if isinstance(out_state, dict):
+                    gen = (
+                        out_state.get("dialogue")
+                        or out_state.get("dialogues")
+                        or out_state.get("dialogue_text")
+                        or out_state.get("text")
+                        or ""
+                    )
+                else:
+                    gen = str(out_state)
+
                 gen = gen.strip()
                 gen = _truncate(gen, MAX_DIALOGUE_CHARS)
+
                 dialogues = session.get("dialogues", [])
                 if len(dialogues) <= si:
                     dialogues.extend([""] * (si - len(dialogues) + 1))
                 dialogues[si] = gen
                 session["dialogues"] = dialogues
+
                 session["last_action"] = "dialogue"
-                # after dialogue, move to next scene index
                 session["scene_index"] = si + 1
                 session["user_override"] = None
                 next_output = {"type": "dialogue", "index": si, "text": gen}
 
-        # update timestamps and store
+        # --------------------------------------------------
+        # Save session and return
+        # --------------------------------------------------
         session["updated_at"] = _now_ts()
         SESSIONS[session_id] = session
 
-        # Build response
         return {
-            "session_id": session_id,
+            "status": "ok",
             "step_name": step_name,
             "output": next_output,
-            "full_state": session,
+            "state": session,
         }
 
     except HTTPException:
-        # re-raise HTTPException as-is
         raise
     except Exception as e:
-        # catch other exceptions and report helpful message
         raise HTTPException(status_code=500, detail=f"Generation error: {e}")
+
+
+@app.post("/session/{session_id}/step")
+def manual_step(session_id: str, req: StepRequest):
+    session = SESSIONS.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    step = req.step.lower()
+    # map frontend step -> backend internal control
+    if step == "character":
+        session["current_step"] = 0
+        session["last_action"] = None
+        SESSIONS[session_id] = session
+        return generate_next(session_id, NextRequest(user_input=None))
+    if step == "outline":
+        session["current_step"] = 1
+        session["last_action"] = None
+        SESSIONS[session_id] = session
+        return generate_next(session_id, NextRequest(user_input=None))
+    if step == "scenes":
+        session["current_step"] = 2
+        session["last_action"] = None  # ensure next is scene
+        SESSIONS[session_id] = session
+        return generate_next(session_id, NextRequest(user_input=None))
+    if step == "dialogue":
+        session["current_step"] = 2
+        session["last_action"] = "scene"  # force dialogue next
+        SESSIONS[session_id] = session
+        return generate_next(session_id, NextRequest(user_input=None))
+
+    raise HTTPException(status_code=400, detail="Invalid step name")
+
+# Auto-generate full story: repeatedly call internal generate_next until finished.
+@app.post("/session/{session_id}/generate_full")
+def generate_full(session_id: str):
+    session = SESSIONS.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    outputs = []
+    # Safety limit to avoid infinite loops
+    max_iterations = 50
+    iterations = 0
+
+    while iterations < max_iterations:
+        iterations += 1
+        try:
+            resp = generate_next(session_id, NextRequest(user_input=None))
+        except HTTPException as he:
+            # bubble up the node error in the outputs so the frontend can display it
+            return {"status": "error", "message": "generation failed", "detail": he.detail, "state": SESSIONS.get(session_id)}
+        except Exception as e:
+            return {"status": "error", "message": "unexpected error", "detail": str(e), "state": SESSIONS.get(session_id)}
+        # If generate_next returns finished shape (it returned dict with status finished)
+        if isinstance(resp, dict) and resp.get("status") in ("finished", "ok") and resp.get("message") == "All beats processed":
+            outputs.append({"status": "finished"})
+            break
+        outputs.append(resp)
+        # check if scene/dialogues finished done via resp or session state
+        session = SESSIONS.get(session_id)
+        if session is None:
+            break
+        beats = session.get("outline_beats") or []
+        if session.get("scene_index", 0) >= len(beats) and session.get("current_step", 0) >= 2:
+            # finished
+            break
+
+    return {"status": "ok", "outputs": outputs, "state": SESSIONS.get(session_id)}
 
 # Small utility route to list sessions (debug)
 @app.get("/session")

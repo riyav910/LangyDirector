@@ -1,7 +1,7 @@
 Write a dramatic, cinematic dialogue between the main characters based on the scenes.
 
 SCENES:
-{scenes}
+{scene}
 
 Rules:
 - Keep lines concise and emotional.

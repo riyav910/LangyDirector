@@ -1,7 +1,7 @@
 Write comic-style dialogue bubbles.
 
 SCENES:
-{scenes}
+{scene}
 
 Rules:
 - Fun, expressive, short dialogue

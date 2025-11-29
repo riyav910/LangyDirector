@@ -1,7 +1,7 @@
 Write emotionally rich novel dialogue.
 
 SCENES:
-{scenes}
+{scene}
 
 Rules:
 - Natural, nuanced dialogue
