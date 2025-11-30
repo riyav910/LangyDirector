@@ -125,7 +125,7 @@ function App() {
         {/* HEADER */}
         <header className="flex justify-between items-center mb-10 border-b border-gray-800 pb-6">
           <h1 className="text-4xl font-extrabold tracking-tight text-blue-500">
-            AI <span className="text-white">Director</span>
+            Langy<span className="text-white">Director</span>
           </h1>
           {sessionId && (
             <div className="px-3 py-1 bg-gray-800 rounded-full text-xs text-gray-400 font-mono">
