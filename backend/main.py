@@ -5,16 +5,17 @@ from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import base64
-import requests
-from fastapi.responses import StreamingResponse
-from io import BytesIO
 import google.generativeai as genai
-from gtts import gTTS
-from fastapi import Response
+from fastapi import Response, HTTPException
+import requests
+import traceback
+from dotenv import load_dotenv
 import os
 
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+load_dotenv()
+
+# genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 from graph.nodes import character_node, outline_node, scene_node, dialogue_node                     
 
@@ -445,3 +446,61 @@ def generate_full(session_id: str):
 @app.get("/session")
 def list_sessions():
     return {"count": len(SESSIONS), "sessions": list(SESSIONS.keys())}
+
+@app.post("/tts")
+def tts_endpoint(payload: dict):
+    import requests, traceback
+
+    text = payload.get("text", "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+
+    if not GOOGLE_API_KEY:
+        raise HTTPException(status_code=500, detail="Missing Google API Key")
+
+    try:
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/"
+            "models/gemini-2.0-flash-tts:generateContent"
+        )
+
+        body = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": text}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "audioOutputConfig": {
+                    "audioEncoding": "mp3"
+                }
+            }
+        }
+
+        print("TTS REQUEST BODY:", body)
+
+        resp = requests.post(url, params={"key": GOOGLE_API_KEY}, json=body)
+
+        print("TTS STATUS:", resp.status_code)
+        print("TTS RAW RESPONSE:", resp.text[:500])
+
+        if resp.status_code != 200:
+            raise HTTPException(status_code=500, detail=resp.text)
+
+        # In older versions, audio is base64 encoded inside JSON
+        data = resp.json()
+
+        # Extract base64 audio
+        b64_audio = data["candidates"][0]["content"]["parts"][0]["audio"]["data"]
+
+        import base64
+        audio_bytes = base64.b64decode(b64_audio)
+
+        return Response(content=audio_bytes, media_type="audio/mpeg")
+
+    except Exception as e:
+        print("TTS FULL ERROR:", e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
