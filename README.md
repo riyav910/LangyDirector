@@ -1,6 +1,6 @@
-# AI Director — Story Generation Engine
+# LangyDirector — Story Generation Engine
 
-**AI Director** is a full-stack application that generates character sheets, outlines, scenes, and dialogues using Google's Gemini LLM. It features a robust session-based architecture that supports both manual step-by-step control for granular editing and an automatic mode for one-click full-story generation.
+**LangyDirector** is a full-stack application that generates character sheets, outlines, scenes, and dialogues using Google's Gemini LLM. It features a robust session-based architecture that supports both manual step-by-step control for granular editing and an automatic mode for one-click full-story generation.
 
 ## 🚀 Features
 
@@ -77,4 +77,5 @@ LANGY_DIRECTOR/
 │   └── tailwind.config.js    # Tailwind CSS configuration
 │
 └── .gitignore
+
 
