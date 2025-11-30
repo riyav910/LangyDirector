@@ -1,0 +1,10 @@
+Write a thriller scene based on the outline:
+- Tight pacing
+- High stakes
+- Suspense-driven descriptions
+- Strategic revelations (but no full answers)
+
+Outline:
+{outline}
+
+Return a single thriller scene that builds tension.

@@ -1,0 +1,10 @@
+Write a drama scene focusing on:
+- Emotions
+- Subtext
+- Realistic human behavior
+- Pacing that builds toward a heartfelt moment
+
+Outline:
+{outline}
+
+Return one emotionally rich dramatic scene.

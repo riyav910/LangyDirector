@@ -1,0 +1,10 @@
+Write dramatic dialogue:
+- Authentic emotions
+- Vulnerability
+- Hard conversations
+- Realistic pacing
+
+Scene:
+{scene}
+
+Return a heartfelt dialogue sequence.

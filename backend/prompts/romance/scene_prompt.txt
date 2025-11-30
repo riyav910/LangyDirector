@@ -1,0 +1,11 @@
+Write a romance scene:
+- Chemistry
+- Emotional tension
+- Descriptive warmth
+- Internal thoughts
+- Subtle gestures
+
+Outline:
+{outline}
+
+Return one soft, emotional romance scene.

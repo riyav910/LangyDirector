@@ -1,0 +1,7 @@
+You are crafting a horror story outline. Using the character sheet below, produce a 6–8 beat outline.
+Each beat must escalate dread, supernatural elements, paranoia, or psychological tension.
+
+Character Sheet:
+{character_sheet}
+
+Return the outline as clear beats labeled “Beat 1, Beat 2…”.

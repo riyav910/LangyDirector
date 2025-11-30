@@ -1,0 +1,10 @@
+Write a horror dialogue sequence based on the scene below.
+The dialogue should:
+- Convey fear, fragmented thoughts, whispers
+- Build suspense or emotional breakdowns
+- Feel grounded and chilling, not cheesy
+
+Scene:
+{scene}
+
+Return a short but intense dialogue sequence.

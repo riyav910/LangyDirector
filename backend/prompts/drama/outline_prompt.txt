@@ -1,0 +1,10 @@
+Write a drama story outline (6–8 beats):
+- Emotional conflict
+- Relationship development
+- Internal vs external struggle
+- Character growth moments
+
+Character Sheet:
+{character_sheet}
+
+Return as clear beats.

@@ -1,0 +1,10 @@
+Write romantic dialogue:
+- Soft emotional beats
+- Subtext
+- Shyness or boldness depending on tone
+- Heartfelt connection
+
+Scene:
+{scene}
+
+Return a sincere, romantic dialogue sequence.

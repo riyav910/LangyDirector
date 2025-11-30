@@ -1,0 +1,10 @@
+Write comedic dialogue:
+- Quick banter
+- Sarcasm
+- Self-deprecating humor
+- Misunderstandings
+
+Scene:
+{scene}
+
+Keep the tone upbeat and funny.

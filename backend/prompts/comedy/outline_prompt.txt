@@ -1,0 +1,10 @@
+Create a comedic story outline (6–8 beats):
+- Misunderstandings
+- Unexpected chaos
+- Funny character dynamics
+- Lighthearted tone
+
+Character Sheet:
+{character_sheet}
+
+Return as "Beat 1, Beat 2…" with humor built in.

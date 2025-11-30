@@ -1,0 +1,11 @@
+Write a comedy scene from this outline.
+Include:
+- Physical comedy
+- Awkward or chaotic events
+- Funny inner thoughts
+- Lighthearted pacing
+
+Outline:
+{outline}
+
+Return one humorous scene.

@@ -1,0 +1,11 @@
+Create a romance story outline (6–8 beats):
+- Meet cute / first tension
+- Emotional bonding
+- Struggle/conflict
+- Turning point
+- Resolution or cliffhanger
+
+Character Sheet:
+{character_sheet}
+
+Return as beats labeled clearly.

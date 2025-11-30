@@ -1,0 +1,11 @@
+Write a romantic character profile including:
+- Love-related fears
+- Desires
+- Past relationships
+- Emotional weaknesses
+- Unique charm traits
+
+Character Description:
+{character_description}
+
+Return a warm, emotionally appealing romance character sheet.

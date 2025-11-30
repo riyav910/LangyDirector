@@ -228,7 +228,7 @@ def generate_next(session_id: str, req: NextRequest = NextRequest()):
     if req and req.user_input:
         session["user_override"] = req.user_input
 
-    session["mode"] = session.get("mode", "cinematic")
+    session["mode"] = session.get("mode", "cinema")
 
     try:
         next_output = None

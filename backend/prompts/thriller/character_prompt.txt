@@ -1,0 +1,7 @@
+You are an expert thriller novelist. Create a high-tension character profile:
+Include conflicts, motivations, secrets, strengths, weaknesses, and skills related to mystery or suspense.
+
+Character Description:
+{character_description}
+
+Return a gripping thriller-style character sheet.

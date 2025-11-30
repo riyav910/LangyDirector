@@ -1,0 +1,7 @@
+You are an expert horror writer. Based on the description below, create a detailed horror character sheet.
+Focus on psychological fears, backstory trauma, phobias, and unique horror-genre traits.
+
+Character Description:
+{character_description}
+
+Return a detailed, vivid horror character profile that sets a dark, unsettling tone.

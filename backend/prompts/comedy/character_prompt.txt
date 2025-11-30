@@ -1,0 +1,6 @@
+Write a comedic character sheet with exaggerated quirks, humorous flaws, funny habits, and chaotic tendencies.
+
+Character Description:
+{character_description}
+
+Return a lighthearted, funny, charming comedic character profile.
