@@ -191,6 +191,11 @@ def _run_outline_gen(session: Dict[str, Any]) -> str:
 # ---------------------------
 # Endpoints
 # ---------------------------
+
+@app.get("/")
+def read_root():
+    return {"status": "active", "service": "AI Director Backend"}
+
 @app.post("/session")
 def create_session(req: CreateSessionRequest):
     session = _make_session(req.story_mode or "cinematic", req.initial_character_description or "")
