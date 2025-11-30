@@ -1,5 +1,5 @@
-// frontend/src/App.js
 import React, { useState } from "react";
+import { Film, MessageSquare, User, Trash2, Play, Zap, FileText } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
 
@@ -11,290 +11,345 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [operationMode, setOperationMode] = useState("manual");
 
-  const readAloud = async (text) => {
-    const res = await fetch("http://localhost:8000/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-
-    if (!res.ok) {
-      alert("TTS failed");
+  // -------------------------------------------------------
+  // Start Story (creates session silently)
+  // -------------------------------------------------------
+  async function startStory() {
+    if (!characterDescription.trim()) {
+      alert("Please describe your character first.");
       return;
     }
-
-    const audioBlob = await res.blob();
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
-    audio.play();
-  };
-
-  async function playTTS(text) {
-    const res = await fetch("http://localhost:8000/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-
-    if (!res.ok) {
-      console.error("TTS Error", await res.text());
-      return;
-    }
-
-    const audioBlob = await res.blob();
-    const url = URL.createObjectURL(audioBlob);
-    const audio = new Audio(url);
-    audio.play();
-  }
-
-
-  async function createSession() {
     setLoading(true);
-    const res = await fetch(`${API_BASE}/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        story_mode: mode,
-        initial_character_description: characterDescription,
-      }),
-    });
-    const data = await res.json();
-    setSessionId(data.session_id);
-    setState(data.state);
-    setLoading(false);
+
+    try {
+      const res = await fetch(`${API_BASE}/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          story_mode: mode,
+          initial_character_description: characterDescription,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to start session");
+
+      const data = await res.json();
+      setSessionId(data.session_id);
+      setState(data.state);
+
+      // Auto mode → immediately generate full story
+      // This handles the automatic workflow trigger
+      if (operationMode === "auto") {
+        await generateFull(data.session_id);
+      }
+    } catch (err) {
+      alert("Error starting story: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
+  // -------------------------------------------------------
+  // Manual Step
+  // -------------------------------------------------------
   async function runStep(step) {
-    if (!sessionId) {
-      alert("Create a session first");
-      return;
-    }
+    if (!sessionId) return;
+
     setLoading(true);
-    const res = await fetch(`${API_BASE}/session/${sessionId}/step`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ step }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert("Server error: " + (err.detail || res.status));
+    try {
+      const res = await fetch(`${API_BASE}/session/${sessionId}/step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || res.status);
+      }
+
+      const data = await res.json();
+      setState(data.state || data);
+    } catch (err) {
+      alert("Error running step: " + err.message);
+    } finally {
       setLoading(false);
-      return;
     }
-    const data = await res.json();
-    setState(data.state || data);
-    setLoading(false);
   }
 
-  async function generateFull() {
-    if (!sessionId) {
-      alert("Create a session first");
-      return;
-    }
+  // -------------------------------------------------------
+  // Auto Full Story Generation
+  // -------------------------------------------------------
+  async function generateFull(id = sessionId) {
+    if (!id) return;
+
     setLoading(true);
-    const res = await fetch(`${API_BASE}/session/${sessionId}/generate_full`, {
-      method: "POST",
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert("Server error: " + (err.detail || res.status));
+    try {
+      const res = await fetch(`${API_BASE}/session/${id}/generate_full`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || res.status);
+      }
+
+      const data = await res.json();
+      setState(data.state || data);
+    } catch (err) {
+      alert("Error generating story: " + err.message);
+    } finally {
       setLoading(false);
-      return;
     }
-    const data = await res.json();
-    setState(data.state || data);
-    setLoading(false);
   }
 
+  // -------------------------------------------------------
+  // Delete Session
+  // -------------------------------------------------------
   async function deleteSession() {
     if (!sessionId) return;
-    await fetch(`${API_BASE}/session/${sessionId}`, { method: "DELETE" });
+    try {
+      await fetch(`${API_BASE}/session/${sessionId}`, { method: "DELETE" });
+    } catch (e) {
+      console.error("Logout cleanup failed", e);
+    }
     setSessionId(null);
     setState(null);
+    setCharacterDescription("");
   }
 
   return (
-    <div className="dark bg-gray-900 text-gray-100 min-h-screen p-6">
-      <h1 className="text-3xl font-bold mb-4">AI Director — Progressive Mode</h1>
+    <div className="bg-gray-900 text-gray-100 min-h-screen font-sans selection:bg-blue-500 selection:text-white">
+      <div className="max-w-5xl mx-auto p-6">
 
-      {!sessionId && (
-        <>
-          <label className="mr-4">
-            Mode:
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-              className="ml-2 bg-gray-800 text-gray-100 border border-gray-700 rounded px-2 py-1"
-            >
-              <option value="cinematic">Cinematic</option>
-              <option value="comic">Comic</option>
-              <option value="novel">Novel</option>
-            </select>
-          </label>
+        {/* HEADER */}
+        <header className="flex justify-between items-center mb-10 border-b border-gray-800 pb-6">
+          <h1 className="text-4xl font-extrabold tracking-tight text-blue-500">
+            AI <span className="text-white">Director</span>
+          </h1>
+          {sessionId && (
+            <div className="px-3 py-1 bg-gray-800 rounded-full text-xs text-gray-400 font-mono">
+              ID: {sessionId.slice(0, 8)}...
+            </div>
+          )}
+        </header>
 
-          <label className="ml-6">
-            Operation:
-            <select
-              value={operationMode}
-              onChange={(e) => setOperationMode(e.target.value)}
-              className="ml-2 bg-gray-800 text-gray-100 border border-gray-700 rounded px-2 py-1"
-            >
-              <option value="manual">Manual (step-by-step)</option>
-              <option value="auto">Auto (generate full story)</option>
-            </select>
-          </label>
+        {/* ----------- USER INPUT STAGE ------------ */}
+        {!sessionId && (
+          <div className="bg-gray-800 p-8 rounded-2xl shadow-xl border border-gray-700 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+              <Zap className="w-6 h-6 text-yellow-400" />
+              New Project Setup
+            </h2>
 
-          <div className="mt-4">
-            <textarea
-              placeholder="Brief character description..."
-              value={characterDescription}
-              onChange={(e) => setCharacterDescription(e.target.value)}
-              rows={5}
-              cols={60}
-              className="w-full bg-gray-800 text-gray-100 border border-gray-700 rounded p-3"
-            />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Narrative Style</label>
+                <select
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value)}
+                  className="w-full bg-gray-900 text-white border border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                >
+                  <option value="cinematic">Cinematic (Movie Script)</option>
+                  <option value="comic">Comic Book (Visual Panels)</option>
+                  <option value="novel">Novel (Prose)</option>
+                </select>
+              </div>
 
-          <div className="mt-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Workflow</label>
+                <select
+                  value={operationMode}
+                  onChange={(e) => setOperationMode(e.target.value)}
+                  className="w-full bg-gray-900 text-white border border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                >
+                  <option value="manual">Manual Director (Step-by-Step)</option>
+                  <option value="auto">Auto-Pilot (One Click)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-400 mb-2">Protagonist & Premise</label>
+              <textarea
+                placeholder="e.g. A retired space pirate who is forced to smuggle a sentient plant across the galaxy..."
+                value={characterDescription}
+                onChange={(e) => setCharacterDescription(e.target.value)}
+                rows={4}
+                className="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all resize-none"
+              />
+            </div>
+
             <button
-              onClick={createSession}
+              onClick={startStory}
               disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white disabled:opacity-50"
+              className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${loading
+                  ? "bg-gray-700 cursor-not-allowed text-gray-400"
+                  : "bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/50"
+                }`}
             >
-              Create Session
+              {loading ? "Initializing..." : "Start Production"}
             </button>
           </div>
-        </>
-      )}
+        )}
 
-      {sessionId && (
-        <>
-          <p className="text-gray-400 mb-2">Session: {sessionId}</p>
+        {/* ----------- CONTROLS ------------ */}
+        {sessionId && (
+          <div className="sticky top-4 z-10 bg-gray-900/90 backdrop-blur-md p-4 rounded-xl border border-gray-800 shadow-2xl mb-8">
+            <div className="flex flex-wrap items-center justify-between gap-4">
 
-          {operationMode === "manual" ? (
-            <div className="mt-4 space-x-2">
-              <button
-                onClick={() => runStep("character")}
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded disabled:opacity-50"
-              >
-                Generate Character Sheet
-              </button>
+              {/* Conditional Rendering for Manual vs Auto controls */}
+              {operationMode === "manual" ? (
+                <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
+                  <ControlButton
+                    onClick={() => runStep("character")}
+                    disabled={loading}
+                    icon={<User size={16} />}
+                    label="Character"
+                    color="blue"
+                  />
+                  <ControlButton
+                    onClick={() => runStep("outline")}
+                    disabled={loading}
+                    icon={<FileText size={16} />}
+                    label="Outline"
+                    color="green"
+                  />
+                  <ControlButton
+                    onClick={() => runStep("scenes")}
+                    disabled={loading}
+                    icon={<Film size={16} />}
+                    label="Scenes"
+                    color="purple"
+                  />
+                  <ControlButton
+                    onClick={() => runStep("dialogue")}
+                    disabled={loading}
+                    icon={<MessageSquare size={16} />}
+                    label="Dialogue"
+                    color="yellow"
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => generateFull(sessionId)}
+                  disabled={loading}
+                  className="bg-green-600 hover:bg-green-500 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 transition-all"
+                >
+                  <Play size={18} /> Regenerate Full Story
+                </button>
+              )}
 
-              <button
-                onClick={() => runStep("outline")}
-                disabled={loading}
-                className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded disabled:opacity-50"
-              >
-                Generate Outline
-              </button>
+              <div className="flex items-center gap-4">
+                {loading && <span className="text-yellow-400 animate-pulse text-sm font-medium">AI is writing...</span>}
 
-              <button
-                onClick={() => runStep("scenes")}
-                disabled={loading}
-                className="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded disabled:opacity-50"
-              >
-                Generate Scenes
-              </button>
-
-              <button
-                onClick={() => runStep("dialogue")}
-                disabled={loading}
-                className="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded disabled:opacity-50"
-              >
-                Generate Dialogue
-              </button>
-
-              <button
-                onClick={deleteSession}
-                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded"
-              >
-                Delete Session
-              </button>
-            </div>
-          ) : (
-            <div className="mt-4 space-x-2">
-              <button
-                onClick={generateFull}
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded disabled:opacity-50"
-              >
-                Generate Full Story
-              </button>
-              <button
-                onClick={deleteSession}
-                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded"
-              >
-                Delete Session
-              </button>
-            </div>
-          )}
-
-          {loading && <p className="mt-4 text-yellow-400">Generating... please wait</p>}
-
-          {state && (
-            <div className="mt-8">
-              <h3 className="text-xl font-semibold">Character Sheet</h3>
-              <button
-                onClick={() => readAloud(state.character_sheet)}
-                className="mt-1 mb-2 bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded"
-              >
-                🔊 Read Aloud
-              </button>
-              <pre className="whitespace-pre-wrap bg-gray-800 p-4 rounded border border-gray-700">
-                {state.character_sheet}
-              </pre>
-
-              <h3 className="text-xl font-semibold mt-6">Outline</h3>
-              <button
-                onClick={() => readAloud(state.outline_text || state.outline)}
-                className="mt-1 mb-2 bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded"
-              >
-                🔊 Read Aloud
-              </button>
-              <pre className="whitespace-pre-wrap bg-gray-800 p-4 rounded border border-gray-700">
-                {state.outline_text || state.outline}
-              </pre>
-
-              <h3 className="text-xl font-semibold mt-6">Scenes</h3>
-              <div>
-                {(state.scenes || []).map((scene, i) => (
-                  <div key={i} className="mb-6">
-                    <strong>Scene {i + 1}:</strong>
-                    <button
-                      onClick={() => readAloud(scene)}
-                      className="ml-2 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
-                    >
-                      🔊 Read Scene
-                    </button>
-                    <pre className="whitespace-pre-wrap bg-gray-800 p-4 rounded border border-gray-700">
-                      {scene}
-                    </pre>
-                  </div>
-                ))}
-              </div>
-
-              <h3 className="text-xl font-semibold mt-6">Dialogues</h3>
-              <div>
-                {(state.dialogues || []).map((dialogue, i) => (
-                  <div key={i} className="mb-6">
-                    <strong>Dialogue {i + 1}:</strong>
-                    <button
-                      onClick={() => readAloud(dialogue)}
-                      className="ml-2 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
-                    >
-                      🔊 Read Dialogue
-                    </button>
-                    <pre className="whitespace-pre-wrap bg-gray-800 p-4 rounded border border-gray-700">
-                      {dialogue}
-                    </pre>
-                  </div>
-                ))}
+                <button
+                  onClick={deleteSession}
+                  className="text-red-400 hover:text-red-300 hover:bg-red-900/30 px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors"
+                >
+                  <Trash2 size={16} /> Reset
+                </button>
               </div>
             </div>
-          )}
-        </>
-      )}
+          </div>
+        )}
+
+        {/* ----------- RESULTS DISPLAY ------------ */}
+        {state && (
+          <div className="space-y-12 pb-20">
+
+            {/* 1. Character Sheet */}
+            {state.character_sheet && (
+              <ResultSection title="Character Profile" color="text-blue-400" icon={<User />}>
+                <pre className="whitespace-pre-wrap font-mono text-sm text-gray-300 leading-relaxed">
+                  {state.character_sheet}
+                </pre>
+              </ResultSection>
+            )}
+
+            {/* 2. Outline */}
+            {(state.outline_text || state.outline) && (
+              <ResultSection title="Story Outline" color="text-green-400" icon={<FileText />}>
+                <pre className="whitespace-pre-wrap font-sans text-gray-300 text-lg leading-relaxed">
+                  {state.outline_text || state.outline}
+                </pre>
+              </ResultSection>
+            )}
+
+            {/* 3. Scenes */}
+            {state.scenes && state.scenes.length > 0 && (
+              <div className="animate-in fade-in duration-700">
+                <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
+                  <Film className="text-purple-400" />
+                  <h3 className="text-2xl font-bold text-purple-400">Scene Breakdown</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-6">
+                  {state.scenes.map((scene, i) => (
+                    <div key={i} className="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-purple-500/50 transition-colors">
+                      <h4 className="font-bold text-gray-400 text-xs uppercase tracking-wider mb-3">Scene {i + 1}</h4>
+                      <pre className="whitespace-pre-wrap font-sans text-gray-200 leading-relaxed">{scene}</pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 4. Dialogues */}
+            {state.dialogues && state.dialogues.length > 0 && (
+              <div className="animate-in fade-in duration-700">
+                <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
+                  <MessageSquare className="text-yellow-400" />
+                  <h3 className="text-2xl font-bold text-yellow-400">Script & Dialogue</h3>
+                </div>
+                <div className="space-y-6">
+                  {state.dialogues.map((dialogue, i) => (
+                    <div key={i} className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 border-l-4 border-l-yellow-500">
+                      <h4 className="font-bold text-yellow-500/80 text-xs uppercase tracking-wider mb-4">Dialogue Sequence {i + 1}</h4>
+                      <pre className="whitespace-pre-wrap font-mono text-sm text-gray-300 leading-relaxed bg-black/20 p-4 rounded-lg">
+                        {dialogue}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Helper Components for Cleaner Code
+function ControlButton({ onClick, disabled, icon, label, color }) {
+  const colorClasses = {
+    blue: "bg-blue-600 hover:bg-blue-500 ring-blue-500",
+    green: "bg-green-600 hover:bg-green-500 ring-green-500",
+    purple: "bg-purple-600 hover:bg-purple-500 ring-purple-500",
+    yellow: "bg-yellow-600 hover:bg-yellow-500 ring-yellow-500",
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${colorClasses[color]} px-4 py-2 rounded-lg font-medium text-white shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale`}
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
+function ResultSection({ title, color, icon, children }) {
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <div className="flex items-center gap-3 mb-4">
+        <span className={color}>{icon}</span>
+        <h3 className={`text-2xl font-bold ${color}`}>{title}</h3>
+      </div>
+      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+        {children}
+      </div>
     </div>
   );
 }

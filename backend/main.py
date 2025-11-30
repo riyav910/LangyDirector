@@ -5,19 +5,19 @@ from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
-from fastapi import Response, HTTPException
-import requests
-import traceback
+from typing import Optional, Literal, Dict, Any, List
+# import google.generativeai as genai
+# from fastapi import Response
+# import requests
+# import traceback
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
-# genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-from graph.nodes import character_node, outline_node, scene_node, dialogue_node                     
+from graph.nodes import character_node, outline_node, scene_node, dialogue_node                    
 
 app = FastAPI()
 
@@ -28,17 +28,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-from typing import Optional, Dict, Any, List
+
 # ---------------------------
 # In-memory session store
 # ---------------------------
 SESSIONS: Dict[str, Dict[str, Any]] = {}
 
-# Limits (tunable)
-MAX_CHAR_SHEET_CHARS = 1800   # ~200-300 words
-MAX_SCENE_CHARS = 1600
-MAX_DIALOGUE_CHARS = 1500
-MAX_OUTLINE_BEAT_SENTENCE_CHARS = 1150
+# Limits (tunable) - INCREASED TO PREVENT CUTOFFS
+MAX_CHAR_SHEET_CHARS = 5000   
+MAX_SCENE_CHARS = 5000
+MAX_DIALOGUE_CHARS = 5000
+MAX_OUTLINE_BEAT_SENTENCE_CHARS = 2500
 
 # ---------------------------
 # Pydantic request models
@@ -129,6 +129,66 @@ def _truncate(text: str, max_chars: int) -> str:
     return cut.rstrip() + "..."
 
 # ---------------------------
+# Generation Logic Helpers
+# ---------------------------
+def _run_character_gen(session: Dict[str, Any]) -> str:
+    if not session.get("character_sheet"):
+        session["character_sheet"] = session.get("character_description", "")
+
+    state_input = {
+        "mode": session["mode"],
+        "character": session["character_sheet"],
+        "character_sheet": session["character_sheet"],
+        "user_override": session.get("user_override"),
+    }
+
+    out_state = character_node(state_input)
+
+    if isinstance(out_state, dict) and out_state.get("_error"):
+        err = out_state["_error"]
+        raise HTTPException(status_code=500, detail=f"LLM node error (character): {err.get('message')}")
+
+    gen = (
+        out_state.get("character_sheet")
+        or out_state.get("character")
+        or out_state.get("text")
+        or ""
+    )
+
+    gen = _truncate(gen, MAX_CHAR_SHEET_CHARS)
+    session["character_sheet"] = gen
+    return gen
+
+def _run_outline_gen(session: Dict[str, Any]) -> str:
+    state_input = {
+        "mode": session["mode"],
+        "character_sheet": session.get("character_sheet", ""),
+        "user_override": session.get("user_override"),
+    }
+
+    out_state = outline_node(state_input)
+
+    if isinstance(out_state, dict) and out_state.get("_error"):
+        err = out_state["_error"]
+        raise HTTPException(status_code=500, detail=f"LLM node error (outline): {err.get('message')}")
+
+    outline_text = (
+        out_state.get("outline")
+        or out_state.get("outline_text")
+        or out_state.get("text")
+        or ""
+    )
+
+    outline_text = _truncate(outline_text, MAX_CHAR_SHEET_CHARS * 2)
+    session["outline_text"] = outline_text
+
+    beats = _parse_outline_to_beats(outline_text)
+    beats = [_truncate(b, MAX_OUTLINE_BEAT_SENTENCE_CHARS) for b in beats]
+    session["outline_beats"] = beats
+    return outline_text
+
+
+# ---------------------------
 # Endpoints
 # ---------------------------
 @app.post("/session")
@@ -174,34 +234,7 @@ def generate_next(session_id: str, req: NextRequest = NextRequest()):
         # --------------------------------------------------
         if session["current_step"] == 0:
             step_name = "character"
-
-            if not session.get("character_sheet"):
-                session["character_sheet"] = session.get("character_description", "")
-
-            state_input = {
-                "mode": session["mode"],
-                "character": session["character_sheet"],
-                "character_sheet": session["character_sheet"],
-                "user_override": session.get("user_override"),
-            }
-
-            out_state = character_node(state_input)
-
-            # Error surfaced by node
-            if isinstance(out_state, dict) and out_state.get("_error"):
-                err = out_state["_error"]
-                raise HTTPException(status_code=500,
-                    detail=f"LLM node error (character): {err.get('message')}")
-
-            gen = (
-                out_state.get("character_sheet")
-                or out_state.get("character")
-                or out_state.get("text")
-                or ""
-            )
-
-            gen = _truncate(gen, MAX_CHAR_SHEET_CHARS)
-            session["character_sheet"] = gen
+            gen = _run_character_gen(session)
             session["last_action"] = "character"
             session["current_step"] = 1
             session["user_override"] = None
@@ -212,48 +245,31 @@ def generate_next(session_id: str, req: NextRequest = NextRequest()):
         # --------------------------------------------------
         elif session["current_step"] == 1:
             step_name = "outline"
-
-            state_input = {
-                "mode": session["mode"],
-                "character_sheet": session.get("character_sheet", ""),
-                "user_override": session.get("user_override"),
-            }
-
-            out_state = outline_node(state_input)
-
-            if isinstance(out_state, dict) and out_state.get("_error"):
-                err = out_state["_error"]
-                raise HTTPException(status_code=500,
-                    detail=f"LLM node error (outline): {err.get('message')}")
-
-            outline_text = (
-                out_state.get("outline")
-                or out_state.get("outline_text")
-                or out_state.get("text")
-                or ""
-            )
-
-            outline_text = _truncate(outline_text, MAX_CHAR_SHEET_CHARS * 2)
-            session["outline_text"] = outline_text
-
-            # convert outline into beats
-            beats = _parse_outline_to_beats(outline_text)
-            beats = [_truncate(b, MAX_OUTLINE_BEAT_SENTENCE_CHARS) for b in beats]
-            session["outline_beats"] = beats
-
+            gen = _run_outline_gen(session)
             session["last_action"] = "outline"
             session["current_step"] = 2
             session["scene_index"] = 0
             session["user_override"] = None
-            next_output = outline_text
+            next_output = gen
 
         # --------------------------------------------------
         # STEP 2+ — SCENE / DIALOGUE GENERATION
         # --------------------------------------------------
         else:
+            # SAFETY CHECK: If we jumped here manually, ensure prerequisites exist.
+            if not session.get("character_sheet"):
+                _run_character_gen(session)
+            
+            # If outline is missing, generate it first!
+            if not session.get("outline_beats"):
+                _run_outline_gen(session)
+            
+            # Now retrieve the guaranteed beats
             beats: List[str] = session.get("outline_beats") or []
+            
+            # Double check in case outline generation failed silently or produced nothing
             if not beats:
-                raise HTTPException(status_code=400, detail="Outline missing; generate outline first")
+                raise HTTPException(status_code=500, detail="Failed to generate outline dependencies.")
 
             si = session.get("scene_index", 0)
             last = session.get("last_action")
@@ -447,60 +463,60 @@ def generate_full(session_id: str):
 def list_sessions():
     return {"count": len(SESSIONS), "sessions": list(SESSIONS.keys())}
 
-@app.post("/tts")
-def tts_endpoint(payload: dict):
-    import requests, traceback
+# @app.post("/tts")
+# def tts_endpoint(payload: dict):
+#     import requests, traceback
 
-    text = payload.get("text", "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Text is required")
+#     text = payload.get("text", "").strip()
+#     if not text:
+#         raise HTTPException(status_code=400, detail="Text is required")
 
-    if not GOOGLE_API_KEY:
-        raise HTTPException(status_code=500, detail="Missing Google API Key")
+#     if not GOOGLE_API_KEY:
+#         raise HTTPException(status_code=500, detail="Missing Google API Key")
 
-    try:
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/"
-            "models/gemini-2.0-flash-tts:generateContent"
-        )
+#     try:
+#         url = (
+#             "https://generativelanguage.googleapis.com/v1beta/"
+#             "models/gemini-2.0-flash-tts:generateContent"
+#         )
 
-        body = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": text}
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "audioOutputConfig": {
-                    "audioEncoding": "mp3"
-                }
-            }
-        }
+#         body = {
+#             "contents": [
+#                 {
+#                     "parts": [
+#                         {"text": text}
+#                     ]
+#                 }
+#             ],
+#             "generationConfig": {
+#                 "audioOutputConfig": {
+#                     "audioEncoding": "mp3"
+#                 }
+#             }
+#         }
 
-        print("TTS REQUEST BODY:", body)
+#         print("TTS REQUEST BODY:", body)
 
-        resp = requests.post(url, params={"key": GOOGLE_API_KEY}, json=body)
+#         resp = requests.post(url, params={"key": GOOGLE_API_KEY}, json=body)
 
-        print("TTS STATUS:", resp.status_code)
-        print("TTS RAW RESPONSE:", resp.text[:500])
+#         print("TTS STATUS:", resp.status_code)
+#         print("TTS RAW RESPONSE:", resp.text[:500])
 
-        if resp.status_code != 200:
-            raise HTTPException(status_code=500, detail=resp.text)
+#         if resp.status_code != 200:
+#             raise HTTPException(status_code=500, detail=resp.text)
 
-        # In older versions, audio is base64 encoded inside JSON
-        data = resp.json()
+#         # In older versions, audio is base64 encoded inside JSON
+#         data = resp.json()
 
-        # Extract base64 audio
-        b64_audio = data["candidates"][0]["content"]["parts"][0]["audio"]["data"]
+#         # Extract base64 audio
+#         b64_audio = data["candidates"][0]["content"]["parts"][0]["audio"]["data"]
 
-        import base64
-        audio_bytes = base64.b64decode(b64_audio)
+#         import base64
+#         audio_bytes = base64.b64decode(b64_audio)
 
-        return Response(content=audio_bytes, media_type="audio/mpeg")
+#         return Response(content=audio_bytes, media_type="audio/mpeg")
 
-    except Exception as e:
-        print("TTS FULL ERROR:", e)
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         print("TTS FULL ERROR:", e)
+#         traceback.print_exc()
+#         raise HTTPException(status_code=500, detail=str(e))
